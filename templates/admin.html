@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - RNG Patel Institute AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='RNGPIT.png') }}">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        // State-changing admin endpoints require a double-submit CSRF token and
+        // return 401 once the session expires. Route every dashboard request
+        // through one helper so both are handled in a single place.
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+        async function apiFetch(url, options = {}) {
+            const opts = { credentials: 'same-origin', ...options };
+            opts.headers = { ...(options.headers || {}) };
+            if ((opts.method || 'GET').toUpperCase() !== 'GET') {
+                opts.headers['X-CSRF-Token'] = CSRF_TOKEN;
+            }
+            const response = await fetch(url, opts);
+            if (response.status === 401) {
+                window.location.href = '/admin/login';
+                throw new Error('Session expired');
+            }
+            return response;
+        }
+    </script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Chart Container Styles */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeIn 0.8s ease backwards;
+        }
+
+        .chart-card:hover {
+            transform: translateY(-5px) scale(1.01);
+            box-shadow: 0 20px 40px var(--shadow-color);
+            border-color: var(--accent-primary);
+        }
+
+        .chart-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            z-index: 10;
+        }
+
+        .chart-card.wide {
+            grid-column: span 2;
+        }
+
+        @media (max-width: 1200px) {
+            .chart-card.wide {
+                grid-column: span 1;
+            }
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 320px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+        }
+
+        .chart-stat {
+            text-align: center;
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .chart-stat:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        .chart-stat-value {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent-primary);
+            display: block;
+        }
+
+        :root {
+            --bg-primary: #050508;
+            --bg-secondary: #0d0d12;
+            --bg-tertiary: #14141d;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0ab;
+            --accent-primary: #6366f1;
+            --accent-secondary: #a855f7;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(13, 13, 18, 0.7);
+            --shadow-color: rgba(99, 102, 241, 0.25);
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --card-glow: rgba(99, 102, 241, 0.15);
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --shadow-color: rgba(99, 102, 241, 0.15);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.2;
+        }
+
+        .app-container {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            animation: slideDown 0.6s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 18px;
+            color: white;
+            box-shadow: 0 8px 32px var(--shadow-color);
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-badge {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .icon-btn:hover {
+            background: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px var(--shadow-color);
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeIn 0.8s ease backwards;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px var(--shadow-color);
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(from 0deg, transparent 0%, var(--card-glow) 25%, transparent 50%);
+            animation: rotateGlow 10s linear infinite;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .stat-card:hover::after { opacity: 1; }
+
+        @keyframes rotateGlow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 25px var(--shadow-color);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Real-time Pulse */
+        .pulse-dot {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 10px;
+            height: 10px;
+            background: var(--success-color);
+            border-radius: 50%;
+            border: 2px solid var(--bg-secondary);
+        }
+        .pulse-dot::after {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Section */
+        .section {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 32px;
+            animation: fadeIn 0.6s ease;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--shadow-color);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        .btn.loading .spinner {
+            display: block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Top Questions List */
+        .questions-list {
+            list-style: none;
+        }
+
+        .question-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .question-item:last-child {
+            border-bottom: none;
+        }
+
+        .question-item:hover {
+            padding-left: 12px;
+        }
+
+        .question-rank {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--accent-primary);
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .question-rank.top-3 {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+        }
+
+        .question-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .question-count {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent-primary);
+            margin-left: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Data Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .data-table tr:hover td {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .data-table .question-cell {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .data-table .response-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .data-table .time-cell {
+            white-space: nowrap;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Search Box */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-input {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text-primary);
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 24px;
+        }
+
+        .page-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        .page-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            border: none;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Summary Section */
+        .summary-content {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 20px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        .summary-content.show {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .summary-content h1,
+        .summary-content h2,
+        .summary-content h3 {
+            color: var(--accent-primary);
+            margin-top: 20px;
+            margin-bottom: 12px;
+        }
+
+        .summary-content h1 {
+            font-size: 24px;
+        }
+
+        .summary-content h2 {
+            font-size: 20px;
+        }
+
+        .summary-content h3 {
+            font-size: 16px;
+        }
+
+        .summary-content strong {
+            color: var(--text-primary);
+        }
+
+        .summary-content ul,
+        .summary-content ol {
+            padding-left: 24px;
+            margin: 12px 0;
+        }
+
+        .summary-content li {
+            margin-bottom: 8px;
+        }
+
+        .summary-meta {
+            display: flex;
+            gap: 24px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading State */
+        .loading-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Icon Styles */
+        .icon-svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .logo svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+        }
+
+        .stat-icon svg,
+        .chart-title-icon svg,
+        .section-title-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+        }
+
+        .user-badge svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .page-title {
+                font-size: 24px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .search-box {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .user-badge span:not(:first-child) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="app-container">
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                </div>
+                <div class="header-title">Admin Dashboard</div>
+            </div>
+            <div class="header-right">
+                <div class="user-badge">
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span>{{ username }}</span>
+                </div>
+                <button class="icon-btn" onclick="toggleTheme()" title="Toggle Theme" id="themeBtn">
+                    <svg id="themeIcon" viewBox="0 0 24 24" class="icon-svg">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                <a href="/" class="icon-btn" title="Back to Chat">
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                        <path
+                            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
+                        </path>
+                    </svg>
+                </a>
+                <a href="/admin/logout" class="icon-btn" title="Logout">
+                    <svg viewBox="0 0 24 24" class="icon-svg">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <h1 class="page-title">Analytics Dashboard</h1>
+            <p class="page-subtitle">Monitor chat activity and gain insights from user interactions</p>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <div class="pulse-dot"></div>
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-value" id="totalQuestions">-</div>
+                    <div class="stat-label">Total Questions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <div class="pulse-dot"></div>
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-value" id="totalSessions">-</div>
+                    <div class="stat-label">Total Sessions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <div class="pulse-dot"></div>
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-value" id="todayQuestions">-</div>
+                    <div class="stat-label">Today's Questions</div>
+                </div>
+            </div>
+
+            <!-- Analytics Charts Section -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="section-title-icon">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <line x1="18" y1="20" x2="18" y2="10"></line>
+                                <line x1="12" y1="20" x2="12" y2="4"></line>
+                                <line x1="6" y1="20" x2="6" y2="14"></line>
+                            </svg>
+                        </div>
+                        Usage Analytics Charts
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadCharts()">
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh Charts
+                    </button>
+                </div>
+
+                <div class="charts-grid">
+                    <!-- Hourly Activity Chart -->
+                    <div class="chart-card wide">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <div class="chart-title-icon"
+                                    style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                                    <svg viewBox="0 0 24 24" class="icon-svg">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                </div>
+                                Hourly Activity (Last 24h)
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="hourlyActivityChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Messages Per Day Chart -->
+                    <div class="chart-card wide">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                <div class="chart-title-icon"
+                                    style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+                                    <svg viewBox="0 0 24 24" class="icon-svg">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                                    </svg>
+                                </div>
+                                Messages Per Day
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="messagesPerDayChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Questions -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="section-title-icon">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                        </div>
+                        Top Questions
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadTopQuestions()">
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="topQuestionsContent">
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading top questions...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Questions -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="section-title-icon">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2">
+                                </path>
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                            </svg>
+                        </div>
+                        All Questions
+                    </div>
+                    <div class="search-box">
+                        <input type="text" class="search-input" id="searchInput" placeholder="Search questions...">
+                        <button class="btn btn-secondary" onclick="searchQuestions()">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="allQuestionsContent">
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading questions...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Summary -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="section-title-icon">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                                <rect x="9" y="9" width="6" height="6"></rect>
+                                <line x1="9" y1="1" x2="9" y2="4"></line>
+                                <line x1="15" y1="1" x2="15" y2="4"></line>
+                                <line x1="9" y1="20" x2="9" y2="23"></line>
+                                <line x1="15" y1="20" x2="15" y2="23"></line>
+                                <line x1="20" y1="9" x2="23" y2="9"></line>
+                                <line x1="20" y1="14" x2="23" y2="14"></line>
+                                <line x1="1" y1="9" x2="4" y2="9"></line>
+                                <line x1="1" y1="14" x2="4" y2="14"></line>
+                            </svg>
+                        </div>
+                        AI Insights Report
+                    </div>
+                    <button class="btn btn-primary" id="generateSummaryBtn" onclick="generateSummary()">
+                        <span class="spinner"></span>
+                        <svg viewBox="0 0 24 24" class="icon-svg">
+                            <polygon
+                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
+                            </polygon>
+                        </svg>
+                        <span>Generate Report</span>
+                    </button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 14px;">
+                    Generate an AI-powered analysis of all chat conversations to uncover patterns, common topics, and
+                    actionable insights.
+                </p>
+                <div class="summary-content" id="summaryContent"></div>
+                <div class="summary-meta" id="summaryMeta" style="display: none;">
+                    <span>
+                        <svg viewBox="0 0 24 24" class="icon-svg"
+                            style="display:inline; vertical-align:text-bottom; width:16px; height:16px">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Analyzed: <strong id="analyzedCount">0</strong> conversations
+                    </span>
+                    <span>
+                        <svg viewBox="0 0 24 24" class="icon-svg"
+                            style="display:inline; vertical-align:text-bottom; width:16px; height:16px">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        Unique questions: <strong id="uniqueCount">0</strong>
+                    </span>
+                    <span>
+                        <svg viewBox="0 0 24 24" class="icon-svg"
+                            style="display:inline; vertical-align:text-bottom; width:16px; height:16px">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        Generated: <strong id="generatedAt">-</strong>
+                    </span>
+                </div>
+            </div>
+            <!-- Reported Issues -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <div class="section-title-icon" style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                            </svg>
+                        </div>
+                        Reported Issues & Feedback
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <select id="reportFilter" class="search-input" style="width: 150px; padding: 8px 12px; height: auto;" onchange="loadReports()">
+                            <option value="all">All Sources</option>
+                            <option value="chat">Chat Bot</option>
+                            <option value="sina">Sina AI</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="loadReports()">
+                            <svg viewBox="0 0 24 24" class="icon-svg">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                <div id="reportedIssuesContent">
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading reports...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Three.js Background
+        let scene, camera, renderer, mesh;
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 15;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            // Floating Star Particles
+            const starGeo = new THREE.BufferGeometry();
+            const stars = [];
+            for(let i=0; i<3000; i++) {
+                stars.push((Math.random()-0.5)*100, (Math.random()-0.5)*100, (Math.random()-0.5)*100);
+            }
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(stars, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0x8b5cf6, size: 0.1, transparent: true, opacity: 0.5 });
+            const starPoints = new THREE.Points(starGeo, starMat);
+            scene.add(starPoints);
+
+            // Flowing Wireframe Plane
+            const geometry = new THREE.PlaneGeometry(50, 50, 40, 40);
+            const material = new THREE.MeshBasicMaterial({ color: 0x6366f1, wireframe: true, transparent: true, opacity: 0.15 });
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.rotation.x = -Math.PI / 2.5;
+            mesh.position.y = -10;
+            scene.add(mesh);
+
+            window._stars = starPoints;
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.0008;
+            
+            // Animate Wireframe
+            const positions = mesh.geometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                const x = positions.getX(i);
+                const y = positions.getY(i);
+                const wave = Math.sin(x * 0.2 + time) * Math.cos(y * 0.2 + time) * 1.5;
+                positions.setZ(i, wave);
+            }
+            positions.needsUpdate = true;
+            mesh.rotation.z += 0.0005;
+
+            // Animate Stars
+            if (window._stars) {
+                window._stars.rotation.y += 0.0002;
+                window._stars.rotation.x += 0.0001;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        initThreeJS();
+
+        // Theme Toggle
+        let currentTheme = 'dark';
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            const themeBtn = document.getElementById('themeBtn');
+            if (currentTheme === 'dark') {
+                themeBtn.innerHTML = '<svg id="themeIcon" viewBox="0 0 24 24" class="icon-svg"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+            } else {
+                themeBtn.innerHTML = '<svg id="themeIcon" viewBox="0 0 24 24" class="icon-svg"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+            }
+
+            const color = currentTheme === 'light' ? 0x6366f1 : 0x8b5cf6;
+            mesh.material.color.setHex(color);
+            // Reload charts with new theme
+            loadCharts();
+        }
+
+        // Chart instances
+        let hourlyActivityChart = null;
+        let messagesPerDayChart = null;
+
+        // Chart colors
+        const chartColors = {
+            input: '#10b981',
+            output: '#f59e0b',
+            total: '#8b5cf6',
+            cost: '#ef4444',
+            messages: '#22c55e',
+            hourly: '#06b6d4'
+        };
+
+        // Get chart text color based on theme
+        function getChartTextColor() {
+            return currentTheme === 'dark' ? '#b4b4b4' : '#64748b';
+        }
+
+        function getChartGridColor() {
+            return currentTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+        }
+
+        // Create gradient for area charts
+        function createGradient(ctx, colorStart, colorEnd) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            return gradient;
+        }
+
+        // Destroy chart if exists
+        function destroyChart(chart) {
+            if (chart) {
+                chart.destroy();
+            }
+            return null;
+        }
+
+        // Format large numbers with K/M suffix
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return Math.round(num).toString();
+        }
+
+        // Load all charts
+        async function loadCharts() {
+            const hourlyContainer = document.getElementById('hourlyActivityChart').parentElement;
+            const messagesContainer = document.getElementById('messagesPerDayChart').parentElement;
+            
+            // Show loading state
+            const loadingHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Syncing analytics...</p></div>';
+            const hourlyOriginal = document.getElementById('hourlyActivityChart');
+            const messagesOriginal = document.getElementById('messagesPerDayChart');
+            
+            try {
+                const response = await apiFetch('/api/analytics/token-usage');
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('Error loading chart data:', data.error);
+                    hourlyContainer.innerHTML = `<div class="empty-state"><p style="color:var(--error-color)">Error: ${data.error}</p></div>`;
+                    messagesContainer.innerHTML = `<div class="empty-state"><p style="color:var(--error-color)">Error: ${data.error}</p></div>`;
+                    return;
+                }
+
+                const dailyUsage = data.daily_usage || [];
+                const hourlyUsage = data.hourly_usage || [];
+
+                if (dailyUsage.length === 0 && hourlyUsage.length === 0) {
+                    hourlyContainer.innerHTML = '<div class="empty-state"><p>No activity data available yet.</p></div>';
+                    messagesContainer.innerHTML = '<div class="empty-state"><p>No activity data available yet.</p></div>';
+                    return;
+                }
+
+                // If we got data, restore the canvases if they were replaced by error messages
+                if (!document.getElementById('hourlyActivityChart')) {
+                    hourlyContainer.innerHTML = '<canvas id="hourlyActivityChart"></canvas>';
+                }
+                if (!document.getElementById('messagesPerDayChart')) {
+                    messagesContainer.innerHTML = '<canvas id="messagesPerDayChart"></canvas>';
+                }
+
+                const dailyLabels = dailyUsage.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                const dailyMessages = dailyUsage.map(d => d.messages || 0);
+
+                const hourlyLabels = hourlyUsage.map(h => {
+                    const date = new Date(h.hour);
+                    return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+                });
+                const hourlyMessages = hourlyUsage.map(h => h.messages || 0);
+
+                const commonOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 1000, easing: 'easeOutQuart' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(13, 13, 18, 0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(99, 102, 241, 0.4)',
+                            borderWidth: 1,
+                            cornerRadius: 12,
+                            padding: 14
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: getChartTextColor(), font: { size: 11, family: "'Poppins', sans-serif" } },
+                            grid: { color: getChartGridColor(), drawBorder: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: getChartTextColor(), 
+                                font: { size: 11 },
+                                callback: value => formatNumber(value)
+                            },
+                            grid: { color: getChartGridColor(), drawBorder: false }
+                        }
+                    }
+                };
+
+                const hourlyCtx = document.getElementById('hourlyActivityChart').getContext('2d');
+                hourlyActivityChart = destroyChart(hourlyActivityChart);
+                hourlyActivityChart = new Chart(hourlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: hourlyLabels,
+                        datasets: [{
+                            label: 'Messages',
+                            data: hourlyMessages,
+                            backgroundColor: createGradient(hourlyCtx, 'rgba(99, 102, 241, 0.6)', 'rgba(99, 102, 241, 0.1)'),
+                            borderColor: '#6366f1',
+                            borderWidth: 2,
+                            borderRadius: 6,
+                            hoverBackgroundColor: '#8b5cf6'
+                        }]
+                    },
+                    options: commonOptions
+                });
+
+                const messagesCtx = document.getElementById('messagesPerDayChart').getContext('2d');
+                messagesPerDayChart = destroyChart(messagesPerDayChart);
+                messagesPerDayChart = new Chart(messagesCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dailyLabels,
+                        datasets: [{
+                            label: 'Daily Messages',
+                            data: dailyMessages,
+                            fill: true,
+                            backgroundColor: createGradient(messagesCtx, 'rgba(16, 185, 129, 0.3)', 'rgba(16, 185, 129, 0)'),
+                            borderColor: '#10b981',
+                            borderWidth: 3,
+                            pointBackgroundColor: '#10b981',
+                            pointBorderColor: '#fff',
+                            pointHoverRadius: 6,
+                            tension: 0.4
+                        }]
+                    },
+                    options: commonOptions
+                });
+
+            } catch (error) {
+                console.error('Error in loadCharts:', error);
+                hourlyContainer.innerHTML = '<div class="empty-state"><p style="color:var(--error-color)">Critical Chart Error</p></div>';
+            }
+        }
+
+        // Pagination state
+        let currentPage = 1;
+        let currentSearch = '';
+
+        // Load Basic Stats
+        async function loadStats() {
+            try {
+                const response = await apiFetch('/api/analytics/stats');
+                const data = await response.json();
+
+                // Basic stats
+                document.getElementById('totalQuestions').textContent = data.total_questions || 0;
+                document.getElementById('totalSessions').textContent = data.total_sessions || 0;
+                document.getElementById('todayQuestions').textContent = data.today_questions || 0;
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load Top Questions
+        async function loadTopQuestions() {
+            const container = document.getElementById('topQuestionsContent');
+            container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Loading...</p></div>';
+
+            try {
+                const response = await apiFetch('/api/analytics/top-questions?limit=10');
+                const data = await response.json();
+
+                if (!data.questions || data.questions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" class="icon-svg" style="opacity:0.5; width:48px; height:48px;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg></div><p>No questions yet. Chat data will appear here once users start asking questions.</p></div>';
+                    return;
+                }
+
+                let html = '<ul class="questions-list">';
+                data.questions.forEach((q, index) => {
+                    const isTop3 = index < 3;
+                    html += `
+                        <li class="question-item">
+                            <span class="question-rank ${isTop3 ? 'top-3' : ''}">${index + 1}</span>
+                            <span class="question-text">${escapeHtml(q.question)}</span>
+                            <span class="question-count">${q.count} times</span>
+                        </li>
+                    `;
+                });
+                html += '</ul>';
+                container.innerHTML = html;
+            } catch (error) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" class="icon-svg" style="opacity:0.5; width:48px; height:48px; color:var(--error-color);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><p>Error loading questions</p></div>';
+                console.error('Error:', error);
+            }
+        }
+
+        // Load All Questions
+        async function loadAllQuestions(page = 1, search = '') {
+            const container = document.getElementById('allQuestionsContent');
+            container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Loading...</p></div>';
+
+            try {
+                const params = new URLSearchParams({ page, per_page: 10 });
+                if (search) params.append('search', search);
+
+                const response = await apiFetch(`/api/analytics/all-questions?${params}`);
+                const data = await response.json();
+
+                if (!data.questions || data.questions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" class="icon-svg" style="opacity:0.5; width:48px; height:48px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><p>No questions found</p></div>';
+                    return;
+                }
+
+                let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Question</th><th>Response Preview</th><th>Time</th><th>Response Time</th></tr></thead><tbody>';
+
+                data.questions.forEach(q => {
+                    const date = new Date(q.created_at).toLocaleString();
+                    html += `
+                        <tr>
+                            <td class="question-cell" title="${escapeHtml(q.user_question)}">${escapeHtml(q.user_question)}</td>
+                            <td class="response-cell" title="${escapeHtml(q.ai_response)}">${escapeHtml(q.ai_response.substring(0, 100))}...</td>
+                            <td class="time-cell">${date}</td>
+                            <td class="time-cell">${q.response_time_ms || '-'}ms</td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table></div>';
+
+                // Pagination
+                if (data.total_pages > 1) {
+                    html += '<div class="pagination">';
+                    html += `<button class="page-btn" onclick="loadAllQuestions(${page - 1}, '${search}')" ${page <= 1 ? 'disabled' : ''}>←</button>`;
+
+                    for (let i = 1; i <= Math.min(data.total_pages, 5); i++) {
+                        html += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadAllQuestions(${i}, '${search}')">${i}</button>`;
+                    }
+
+                    if (data.total_pages > 5) {
+                        html += `<span style="padding: 0 8px;">...</span>`;
+                        html += `<button class="page-btn" onclick="loadAllQuestions(${data.total_pages}, '${search}')">${data.total_pages}</button>`;
+                    }
+
+                    html += `<button class="page-btn" onclick="loadAllQuestions(${page + 1}, '${search}')" ${page >= data.total_pages ? 'disabled' : ''}>→</button>`;
+                    html += '</div>';
+                }
+
+                container.innerHTML = html;
+                currentPage = page;
+                currentSearch = search;
+            } catch (error) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" class="icon-svg" style="opacity:0.5; width:48px; height:48px; color:var(--error-color);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><p>Error loading questions</p></div>';
+                console.error('Error:', error);
+            }
+        }
+
+        // Search Questions
+        function searchQuestions() {
+            const search = document.getElementById('searchInput').value.trim();
+            loadAllQuestions(1, search);
+        }
+
+        // Generate AI Summary
+        async function generateSummary() {
+            const btn = document.getElementById('generateSummaryBtn');
+            const content = document.getElementById('summaryContent');
+            const meta = document.getElementById('summaryMeta');
+
+            btn.disabled = true;
+            btn.classList.add('loading');
+            content.classList.remove('show');
+            meta.style.display = 'none';
+
+            try {
+                const response = await apiFetch('/api/analytics/generate-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    content.innerHTML = `<p style="color: var(--error-color);">Error: ${data.error}</p>`;
+                } else {
+                    content.innerHTML = parseMarkdown(data.summary);
+                    document.getElementById('analyzedCount').textContent = data.analyzed_chats;
+                    document.getElementById('uniqueCount').textContent = data.unique_questions;
+                    document.getElementById('generatedAt').textContent = new Date(data.generated_at).toLocaleString();
+                    meta.style.display = 'flex';
+                }
+                content.classList.add('show');
+            } catch (error) {
+                content.innerHTML = '<p style="color: var(--error-color);">Failed to generate summary. Please try again.</p>';
+                content.classList.add('show');
+                console.error('Error:', error);
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            }
+        }
+
+        async function loadReports() {
+            const container = document.getElementById('reportedIssuesContent');
+            const filter = document.getElementById('reportFilter').value;
+            
+            try {
+                const resp = await apiFetch('/api/admin/reports');
+                let reports = await resp.json();
+                
+                if (filter !== 'all') {
+                    reports = reports.filter(r => r.source === filter);
+                }
+
+                if (!reports || reports.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">🎉</div>
+                            <p>No issues reported for this filter.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Rating</th>
+                                    <th>Query / Issue</th>
+                                    <th>AI Response</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                reports.forEach(report => {
+                    const stars = '★'.repeat(report.rating) + '☆'.repeat(5 - report.rating);
+                    const sourceLabel = report.source === 'sina' ? 
+                        '<span class="chart-stat" style="background:#8b5cf6; color:white; padding: 2px 8px; border-radius:10px; font-size:10px;">SINA</span>' : 
+                        '<span class="chart-stat" style="background:#10b981; color:white; padding: 2px 8px; border-radius:10px; font-size:10px;">CHAT</span>';
+                    
+                    html += `
+                        <tr>
+                            <td>${sourceLabel}</td>
+                            <td><span style="color:#f1c40f; letter-spacing:1px; font-weight:bold;">${stars}</span></td>
+                            <td class="question-cell">
+                                <div style="font-weight:600; margin-bottom:4px;">${escapeHtml(report.query)}</div>
+                                <div style="font-size:12px; border-left: 2px solid #ef4444; padding-left: 8px; color: var(--text-primary);">
+                                    ${escapeHtml(report.reason || 'No specific feedback provided')}
+                                </div>
+                            </td>
+                            <td class="response-cell">${escapeHtml(report.ai_response || '')}</td>
+                            <td class="time-cell">${new Date(report.created_at).toLocaleString()}</td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error('Reports fetch error:', err);
+                container.innerHTML = '<p style="color:red; text-align:center;">Failed to load reports.</p>';
+            }
+        }
+
+        // Markdown Parser
+
+        function parseMarkdown(text) {
+            let html = text;
+
+            // Headers
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+            // Bold
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+            // Lists
+            html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
+            html = html.replace(/^- (.+)$/gim, '<li>$1</li>');
+            html = html.replace(/^\d+\. (.+)$/gim, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => '<ul>' + match + '</ul>');
+
+            // Line breaks
+            html = html.replace(/\n\n/g, '</p><p>');
+            html = html.replace(/\n/g, '<br>');
+
+            return html;
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Search on Enter
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') searchQuestions();
+        });
+
+        // Refresh all data
+        function refreshAll() {
+            console.log('Refreshing all data...');
+            loadStats();
+            loadCharts();
+            loadTopQuestions();
+            loadReports();
+            loadAllQuestions(currentPage, currentSearch);
+        }
+
+
+        // Auto-refresh stats every 10 seconds
+        setInterval(() => {
+            loadStats();
+        }, 10000);
+
+        // Auto-refresh questions every 30 seconds
+        setInterval(() => {
+            loadTopQuestions();
+            loadAllQuestions(currentPage, currentSearch);
+        }, 30000);
+
+        // Auto-refresh charts every 60 seconds
+        setInterval(() => {
+            loadCharts();
+        }, 60000);
+
+        // Initial Load
+        console.log('Dashboard loading...');
+        loadStats();
+        loadCharts();
+        loadTopQuestions();
+        loadReports();
+        loadAllQuestions();
+
+    </script>
+    <!-- CREDIT FOOTER -->
+    <div style="padding: 24px; text-align: center; border-top: 1px solid var(--border-color); font-size: 14px; color: var(--text-secondary); background: var(--bg-secondary);">
+        Made by <span style="color: var(--accent-primary); font-weight: 700;">Shis Maheta and Zuveriya Meman</span>
+    </div>
+</body>
+
+</html>

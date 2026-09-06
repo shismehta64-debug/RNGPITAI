@@ -1,0 +1,25 @@
+services:
+  chatbot:
+    build: .
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      PORT: "7860"
+      BEHIND_PROXY: "1"
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data:ro
+      # Persist the vector index and embedding cache so restarts are instant
+      # and cost no API quota.
+      - rngai_cache:/app/.rngai_cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+volumes:
+  rngai_cache:

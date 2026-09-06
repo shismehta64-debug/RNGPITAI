@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>SINA AI - RNG Patel Institute Assistant</title>
+  <meta name="description"
+    content="SINA AI - the assistant for RNG Patel Institute of Technology. Ask about courses, admissions, fees, faculty, placements and campus life.">
+
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='RNGPIT.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+
+  <!-- The avatar is the single biggest asset; start it early. -->
+  <link rel="preload" href="/vrm-model" as="fetch" crossorigin>
+
+  <script>
+    // Applied before first paint so the page never flashes the wrong theme.
+    try {
+      var saved = localStorage.getItem("sina.theme");
+      var preferred = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", saved || preferred);
+    } catch (e) { /* private mode */ }
+  </script>
+</head>
+
+<body>
+  <a class="skip-link" href="#chatInput">Skip to the message box</a>
+
+  <!-- ===================================================== loading ===== -->
+  <div class="loading-screen" id="loadingScreen" role="status" aria-live="polite">
+    <div class="loading-logos">
+      <img src="{{ url_for('static', filename='RNGPIT.png') }}" alt="RNGPIT logo">
+      <span class="loading-x" aria-hidden="true">&times;</span>
+      <img src="{{ url_for('static', filename='SINA-FAV-LOGO-NOBG.png') }}" alt="SINA logo">
+    </div>
+    <div class="loading-title">RNGPIT &times; SINA</div>
+    <div class="loading-bar"><div class="loading-bar-fill" id="loadingFill"></div></div>
+    <div class="loading-status" id="loadingStatus">Starting up</div>
+  </div>
+
+  <!-- ====================================================== header ===== -->
+  <header class="header">
+    <div class="header-left">
+      <button class="icon-btn hamburger" id="menuBtn" aria-label="Open conversation history">
+        <span></span><span></span><span></span>
+      </button>
+      <img class="header-logo" src="{{ url_for('static', filename='RNGPIT.png') }}" alt="">
+      <span class="header-title">SINA AI &middot; RNGPIT</span>
+    </div>
+
+    <div class="header-right">
+      <div class="tabs" role="tablist" aria-label="Assistant mode">
+        <button class="tab-btn" id="tabSina" role="tab" aria-selected="true" aria-controls="sinaPanel">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M2 12h3M19 12h3M4.9 19.1l2.2-2.2M16.9 7.1l2.2-2.2" />
+          </svg><span>Sina AI</span>
+        </button>
+        <button class="tab-btn" id="tabChat" role="tab" aria-selected="false" aria-controls="chatPanel">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg><span>Chat</span>
+        </button>
+      </div>
+
+      <button class="icon-btn" id="themeBtn" aria-label="Switch to light theme">
+        <svg id="themeIconMoon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+        <svg id="themeIconSun" viewBox="0 0 24 24" aria-hidden="true" hidden>
+          <circle cx="12" cy="12" r="5" />
+          <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================================================== sidebar ===== -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside class="sidebar" id="sidebar" aria-hidden="true" aria-label="Conversation history">
+    <div class="sidebar-header">
+      <h2>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>Conversation
+      </h2>
+      <button class="icon-btn" id="sidebarClose" aria-label="Close history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div class="sidebar-body scrollable" id="sidebarBody"></div>
+    <div class="sidebar-footer">
+      <button class="btn-ghost" id="clearHistoryBtn">Clear conversation</button>
+    </div>
+  </aside>
+
+  <!-- ================================================== sina panel ===== -->
+  <section class="tab-panel active" id="sinaPanel" role="tabpanel" aria-labelledby="tabSina">
+    <canvas id="sinaCanvas" aria-label="Sina, the 3D assistant" role="img"></canvas>
+    <div class="sina-brand" aria-hidden="true">SINA</div>
+    <div class="sina-status" id="sinaStatus" role="status" aria-live="polite"></div>
+
+    <div class="sina-overlay">
+      <div class="sina-bubble scrollable" id="sinaBubble" role="log" aria-live="polite"></div>
+
+      <div class="sina-controls">
+        <div class="sina-input-wrap">
+          <label class="sr-only" for="sinaInput">Ask Sina</label>
+          <input class="sina-input" id="sinaInput" type="text" maxlength="800" autocomplete="off"
+            placeholder="Ask Sina anything about RNGPIT">
+          <button class="round-btn" id="sinaSend" aria-label="Send message">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11 12 6l5 5M12 18V7" /></svg>
+          </button>
+        </div>
+
+        <button class="round-btn mic-btn" id="micBtn" aria-label="Speak to Sina" aria-pressed="false">
+          <svg id="micIcon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" />
+            <path d="M12 19v4M8 23h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <span class="wave-bars" id="micWave" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </span>
+        </button>
+      </div>
+
+      <p class="credit">Made by <b>Shis Maheta and Zuveriya Meman</b></p>
+    </div>
+  </section>
+
+  <!-- ================================================== chat panel ===== -->
+  <section class="tab-panel" id="chatPanel" role="tabpanel" aria-labelledby="tabChat">
+    <div id="waveLayer" style="position:absolute;inset:0;pointer-events:none;display:none"></div>
+
+    <div class="chat-scroll scrollable" id="chatScroll">
+      <div class="chat-inner" id="chatInner">
+        <div class="welcome" id="welcome">
+          <img src="{{ url_for('static', filename='RNGPIT.png') }}" alt="">
+          <h1>Welcome to RNGPIT AI</h1>
+          <p>Your assistant for courses, admissions, fees, facilities, placements and campus life.</p>
+
+          <div class="prompt-grid">
+            <button class="prompt-card" data-prompt="What courses does RNG Patel Institute offer?">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              <b>Courses</b><span>Every programme on offer</span>
+            </button>
+            <button class="prompt-card" data-prompt="Tell me about the admission process and eligibility">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M16 13H8M16 17H8" />
+              </svg>
+              <b>Admissions</b><span>Requirements and deadlines</span>
+            </button>
+            <button class="prompt-card" data-prompt="What is the fee structure at RNGPIT?">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v12M15 9.5a3 3 0 0 0-3-1.5c-1.7 0-3 1-3 2.2 0 2.8 6 1.6 6 4.4 0 1.3-1.3 2.4-3 2.4a3 3 0 0 1-3-1.5" />
+              </svg>
+              <b>Fees</b><span>Tuition and scholarships</span>
+            </button>
+            <button class="prompt-card" data-prompt="How is the placement record at RNGPIT?">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="2" y="7" width="20" height="14" rx="2" />
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+              </svg>
+              <b>Placements</b><span>Recruiters and packages</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="composer-meta">
+          <span class="kb-hint" id="kbHint">Enter to send &middot; Shift+Enter for a new line</span>
+          <span class="char-count" id="charCount">0 / 800</span>
+        </div>
+        <label class="sr-only" for="chatInput">Ask about RNG Patel Institute</label>
+        <textarea id="chatInput" rows="1" maxlength="800"
+          placeholder="Ask anything about RNG Patel Institute..."></textarea>
+        <button class="round-btn" id="sendBtn" aria-label="Send message">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11 12 6l5 5M12 18V7" /></svg>
+        </button>
+        <button class="round-btn" id="stopBtn" aria-label="Stop generating" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+        </button>
+      </div>
+      <p class="credit" style="margin-top:10px">Made by <b>Shis Maheta and Zuveriya Meman</b></p>
+    </div>
+  </section>
+
+  <!-- ====================================================== modals ===== -->
+  <div class="modal" id="changelogModal" role="dialog" aria-modal="true" aria-labelledby="changelogTitle"
+    aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close" data-close-modal="changelogModal" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"
+          aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+      <div class="modal-head">
+        <div class="modal-icon" aria-hidden="true">&#10024;</div>
+        <h2 id="changelogTitle">What's new</h2>
+        <div><span class="badge">V4.0</span></div>
+        <p>Sina got faster, smarter and a lot more alive.</p>
+      </div>
+
+      <div class="cl-group">
+        <h3>Answers</h3>
+        <div class="cl-item"><span aria-hidden="true">&#9889;</span><span>Repeat questions now answer instantly from cache, and greetings never wait on the model.<small>Most answers start streaming in well under a second.</small></span></div>
+        <div class="cl-item"><span aria-hidden="true">&#127919;</span><span>A rebuilt retrieval pipeline reads tables and headings properly, so answers about faculty, fees and placements are far more accurate.</span></div>
+        <div class="cl-item"><span aria-hidden="true">&#128172;</span><span>Sina remembers the conversation, so follow-ups like "what about civil?" now work.</span></div>
+      </div>
+
+      <div class="cl-group">
+        <h3>Sina's avatar</h3>
+        <div class="cl-item"><span aria-hidden="true">&#128069;</span><span>Her mouth is driven by the actual audio now - real vowel shapes instead of a fixed flapping loop.</span></div>
+        <div class="cl-item"><span aria-hidden="true">&#129504;</span><span>Spring-based motion: breathing, weight shifts, natural blinks, gaze that follows you, and a wave hello.</span></div>
+        <div class="cl-item"><span aria-hidden="true">&#128267;</span><span>Rendering pauses when off-screen and adapts to your device, so laptops stop overheating.</span></div>
+      </div>
+
+      <div class="cl-group">
+        <h3>Interface</h3>
+        <div class="cl-item"><span aria-hidden="true">&#9724;</span><span>Stop a reply mid-stream, copy any answer, or have it read aloud.</span></div>
+        <div class="cl-item"><span aria-hidden="true">&#127912;</span><span>Your theme is remembered and follows your system setting by default.</span></div>
+        <div class="cl-item"><span aria-hidden="true">&#9855;</span><span>Full keyboard navigation, screen-reader labels and reduced-motion support.</span></div>
+      </div>
+
+      <button class="btn-primary" data-close-modal="changelogModal">Let's go</button>
+    </div>
+  </div>
+
+  <div class="modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportTitle" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close" data-close-modal="reportModal" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"
+          aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+      <div class="modal-head">
+        <div class="modal-icon" aria-hidden="true">&#128681;</div>
+        <h2 id="reportTitle">Report an issue</h2>
+        <p>Rate this answer so the team can improve it.</p>
+      </div>
+
+      <div class="rating" role="radiogroup" aria-label="Rating out of five">
+        <span class="star" role="radio" aria-checked="false" tabindex="0" data-value="1" aria-label="1 star">&#9733;</span>
+        <span class="star" role="radio" aria-checked="false" tabindex="0" data-value="2" aria-label="2 stars">&#9733;</span>
+        <span class="star" role="radio" aria-checked="false" tabindex="0" data-value="3" aria-label="3 stars">&#9733;</span>
+        <span class="star" role="radio" aria-checked="false" tabindex="0" data-value="4" aria-label="4 stars">&#9733;</span>
+        <span class="star" role="radio" aria-checked="false" tabindex="0" data-value="5" aria-label="5 stars">&#9733;</span>
+      </div>
+
+      <label class="sr-only" for="reportText">What went wrong?</label>
+      <textarea class="report-text" id="reportText"
+        placeholder="What was wrong? Incorrect details, missing information, formatting..."></textarea>
+      <button class="btn-primary" id="submitReport">Submit feedback</button>
+    </div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- ===================================================== scripts ===== -->
+  <script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.3.4/lib/three-vrm.module.min.js"
+      }
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <!-- DOMPurify is what makes it safe to render model output as Markdown. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+  <noscript>
+    <div style="padding:80px 24px;text-align:center">
+      <h1>JavaScript is required</h1>
+      <p>SINA needs JavaScript to chat. Please enable it, or email
+        <code>info@rngpit.ac.in</code>.</p>
+    </div>
+  </noscript>
+</body>
+
+</html>

@@ -1,0 +1,25 @@
+# Core web stack
+Flask>=3.0,<4.0
+Werkzeug>=3.0,<4.0
+flask-cors>=4.0          # only used when CORS_ORIGINS is set
+gunicorn>=21.2           # production WSGI server
+
+# HTTP + config
+requests>=2.32
+python-dotenv>=1.0
+
+# Vector maths. Optional: rngai/vecmath.py falls back to pure Python, but the
+# dense search is ~10x faster with it.
+numpy>=1.26
+
+# Persistence / analytics
+supabase>=2.5
+
+# Voice output
+edge-tts>=6.1
+
+# Deliberately NOT required any more (they were ~2.5 GB of wheels for work the
+# remote NVIDIA API already does):
+#   torch, transformers, sentence-transformers  - no local model is ever loaded
+#   chromadb                                    - replaced by rngai/knowledge.py
+#   openai                                      - replaced by rngai/nvidia.py

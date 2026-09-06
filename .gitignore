@@ -1,0 +1,42 @@
+# Environment variables - keep this file private!
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Model cache
+model_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# RNGAI runtime cache (vector index + embedding cache)
+.rngai_cache/
+embedding_cache.db
+
+# Scratch
+scratch/
+test.txt
